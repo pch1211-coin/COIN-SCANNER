@@ -1,1 +1,128 @@
+import { useEffect, useMemo, useState } from "react";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:10000";
+const API_KEY = import.meta.env.VITE_API_KEY || "";
+
+export default function App() {
+  const [top, setTop] = useState(30);
+  const [maxSymbols, setMaxSymbols] = useState(120);
+  const [refreshSec, setRefreshSec] = useState(30);
+  const [meta, setMeta] = useState({ ok: true, updated: "-", error: "" });
+  const [rows, setRows] = useState([]);
+
+  const url = useMemo(() => {
+    const u = new URL(API_BASE.replace(/\/$/, "") + "/api/top");
+    u.searchParams.set("top", String(top));
+    u.searchParams.set("maxSymbols", String(maxSymbols));
+    return u.toString();
+  }, [top, maxSymbols]);
+
+  async function load() {
+    try {
+      const r = await fetch(url, {
+        headers: API_KEY ? { "x-api-key": API_KEY } : {}
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+      setMeta({ ok: true, updated: j.updated, error: "" });
+      setRows(Array.isArray(j.data) ? j.data : []);
+    } catch (e) {
+      setMeta({ ok: false, updated: "-", error: String(e?.message || e) });
+      setRows([]);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    const t = setInterval(load, Math.max(5, Number(refreshSec || 30)) * 1000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, refreshSec]);
+
+  return (
+    <div style={{ fontFamily: "system-ui", padding: 16 }}>
+      <h2 style={{ margin: 0 }}>MEXC Futures DASH</h2>
+      <div style={{ marginTop: 8, display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <label>
+          TOP&nbsp;
+          <select value={top} onChange={(e) => setTop(Number(e.target.value))}>
+            <option value={30}>30</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </label>
+
+        <label>
+          MAX_SYMBOLS&nbsp;
+          <select value={maxSymbols} onChange={(e) => setMaxSymbols(Number(e.target.value))}>
+            <option value={60}>60</option>
+            <option value={120}>120</option>
+            <option value={180}>180</option>
+            <option value={250}>250</option>
+          </select>
+        </label>
+
+        <label>
+          Refresh&nbsp;
+          <select value={refreshSec} onChange={(e) => setRefreshSec(Number(e.target.value))}>
+            <option value={10}>10초</option>
+            <option value={20}>20초</option>
+            <option value={30}>30초</option>
+            <option value={60}>60초</option>
+          </select>
+        </label>
+
+        <button onClick={load}>지금 갱신</button>
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        상태:{" "}
+        <b style={{ color: meta.ok ? "green" : "red" }}>
+          {meta.ok ? "OK" : "ERROR"}
+        </b>
+        &nbsp;&nbsp; updated: {meta.updated}
+        {meta.error ? <div style={{ color: "crimson" }}>{meta.error}</div> : null}
+      </div>
+
+      <div style={{ marginTop: 12, overflowX: "auto" }}>
+        <table cellPadding={8} style={{ borderCollapse: "collapse", minWidth: 900 }}>
+          <thead>
+            <tr style={{ background: "#f2f2f2" }}>
+              <th>Rank</th>
+              <th>Symbol</th>
+              <th>Direction</th>
+              <th>Type</th>
+              <th>Band(%)</th>
+              <th>Price</th>
+              <th>MA30</th>
+              <th>RSI14</th>
+              <th>Dev(%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.rank} style={{ borderTop: "1px solid #ddd" }}>
+                <td>{r.rank}</td>
+                <td>{r.symbol}</td>
+                <td>{r.direction}</td>
+                <td>{r.type}</td>
+                <td>{Number(r.bandPct).toFixed(2)}</td>
+                <td>{Number(r.price).toFixed(6)}</td>
+                <td>{Number(r.ma30).toFixed(6)}</td>
+                <td>{Number(r.rsi14).toFixed(2)}</td>
+                <td>{Number(r.devPct).toFixed(2)}</td>
+              </tr>
+            ))}
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={9} style={{ padding: 12, color: "#666" }}>
+                  조건에 맞는 항목이 없습니다.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
